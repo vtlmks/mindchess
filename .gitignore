@@ -1,0 +1,21 @@
+# build artifacts (binaries)
+/mindchess
+/mindchess[0-9]
+/mindchess[0-9]*[0-9]
+/mindchess[0-9]_gcc
+/mindchess[0-9]_clang
+/mindchess[0-9]*[0-9]_gcc
+/mindchess[0-9]*[0-9]_clang
+/m[0-9]_gcc
+/m[0-9]_clang
+/m[0-9]_perf
+/mindchess_bench
+/simd_probe
+/chessbit_gcc
+/chessbit_clang
+
+# profiling artifacts
+*.data
+perf.data*
+
+# vendored reference engine (large binaries, not recompiled here)

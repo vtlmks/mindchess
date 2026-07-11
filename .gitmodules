@@ -1,0 +1,4 @@
+[submodule "external/chessbit"]
+	path = external/chessbit
+	url = https://github.com/thuijbregts/chessbit.git
+	branch = boardstate_stats
