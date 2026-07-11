@@ -34,6 +34,22 @@ An earlier five-pair run with boost enabled confirmed the same ordering:
 
 These values are local measurements, not claims about every CPU or compiler version. Rebuild and remeasure on the target machine.
 
+## Raw start-position reference
+
+Under the same fixed-clock, single-core conditions, Mindchess completed start-position perft 8 in one measured run as follows:
+
+```text
+nodes: 84,998,978,956
+time: 32.814 seconds
+rate: 2,590.31 MNPS
+```
+
+This is raw single-thread enumeration without a transposition table. The command was:
+
+```sh
+taskset -c 1 chrt -f 99 ./mindchess perft 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1' 8
+```
+
 ## Clone and build
 
 Clone with the pinned Chessbit source:
