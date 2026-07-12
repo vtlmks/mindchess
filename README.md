@@ -55,7 +55,7 @@ taskset -c 1 chrt -f 99 ./mindchess perft 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RN
 Clone with the pinned Chessbit source:
 
 ```sh
-git clone --recurse-submodules <repository-url>
+git clone --recurse-submodules https://github.com/vtlmks/mindchess.git
 cd mindchess
 ```
 
