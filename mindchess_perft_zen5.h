@@ -45,11 +45,6 @@
 #define MC_PASSANT(F) passant_pin_mask(b, (F), MC_S)
 #define MC_CAN_CASTLE(A, CS) can_castle(b, (A), (CS))
 
-static uint64_t perft_2_0_0_0(struct position *b); static uint64_t perft_2_0_0_1(struct position *b);
-static uint64_t perft_2_0_1_0(struct position *b); static uint64_t perft_2_0_1_1(struct position *b);
-static uint64_t perft_2_1_0_0(struct position *b); static uint64_t perft_2_1_0_1(struct position *b);
-static uint64_t perft_2_1_1_0(struct position *b); static uint64_t perft_2_1_1_1(struct position *b);
-
 static uint64_t perft_deep_0_0_0(struct position *b, uint32_t depth); static uint64_t perft_deep_0_0_1(struct position *b, uint32_t depth);
 static uint64_t perft_deep_0_1_0(struct position *b, uint32_t depth); static uint64_t perft_deep_0_1_1(struct position *b, uint32_t depth);
 static uint64_t perft_deep_1_0_0(struct position *b, uint32_t depth); static uint64_t perft_deep_1_0_1(struct position *b, uint32_t depth);
@@ -144,43 +139,6 @@ AINLINE uint64_t passant_pin_mask_delta(struct leaf_delta *d, uint32_t from, uin
 	return (sq == NOSQUARE) ? FULL_BOARD : 0;
 }
 
-// [=]===^=[ depth-2 dispatch (make-recurse only) ]==================[=]
-AINLINE uint64_t perft2(struct position *nb, uint32_t idx) {
-	switch(idx) {
-		case 0: {
-			return perft_2_0_0_0(nb);
-		}
-
-		case 1: {
-			return perft_2_0_0_1(nb);
-		}
-
-		case 2: {
-			return perft_2_0_1_0(nb);
-		}
-
-		case 3: {
-			return perft_2_0_1_1(nb);
-		}
-
-		case 4: {
-			return perft_2_1_0_0(nb);
-		}
-
-		case 5: {
-			return perft_2_1_0_1(nb);
-		}
-
-		case 6: {
-			return perft_2_1_1_0(nb);
-		}
-
-		default: {
-			return perft_2_1_1_1(nb);
-		}
-	}
-}
-
 // [=]===^=[ gen_leaf: depth-1 count (terminal) ]=====================[=]
 AINLINE uint64_t gen_leaf(struct position *b, uint32_t side, uint32_t kmv) {
 #define MC_S side
@@ -192,7 +150,7 @@ AINLINE uint64_t gen_leaf(struct position *b, uint32_t side, uint32_t kmv) {
 #define PROMOTION(F, T, P, C, R) 0
 #define DOUBLE(F, T, R) 0
 #define MC_DELTA_VIEW 0
-#include "mindchess_body.inc"
+#include "mindchess_body_zen5.inc"
 #undef MC_S
 #undef MC_KM
 #undef MC_LEAF
@@ -224,7 +182,7 @@ AINLINE uint64_t gen_leaf(struct position *b, uint32_t side, uint32_t kmv) {
 #define MC_PASSANT(F) passant_pin_mask_delta(&d, (F), MC_S)
 #define MC_CAN_CASTLE(A, CS) ((d.cas & CASTLING[(CS)]) && !(CASTLING_OCCUPIED_SQUARES[(CS)] & d.occ_both) && !((A) & CASTLING_PASSING_SQUARES[(CS)]))
 
-AINLINE uint64_t gen_leaf_delta(struct position *b, uint32_t mfrom, uint32_t mto, uint32_t piece, uint32_t capture, uint32_t us, uint32_t kmv, uint32_t ep, uint64_t knight_moves) {
+AINLINE uint64_t gen_leaf_delta(struct position *b, uint32_t mfrom, uint32_t mto, uint32_t piece, uint32_t capture, uint32_t us, uint32_t kmv, uint32_t ep, uint64_t knight_moves, uint32_t check_ray_gate) {
 	(void)knight_moves;
 	uint32_t them = us ^ 1u;
 	uint64_t t = 1ull << mto;
@@ -269,7 +227,10 @@ AINLINE uint64_t gen_leaf_delta(struct position *b, uint32_t mfrom, uint32_t mto
 	} else if(piece == PC_N) {
 		d.checks |= KNIGHT_ATTACKS[d.king_sq[them]] & delta_piece(&d, us, PC_N);
 	}
-	d.checks |= slider_checks(delta_piece(&d, us, PC_B), delta_piece(&d, us, PC_R), delta_piece(&d, us, PC_Q), d.occ_both, d.king_sq[them]);
+	// NOTE(peter): A legal side-to-move cannot already check the opposing king, so only moves touching its rays can create a slider check.
+	if(!check_ray_gate || (d.mv & (BISHOP_XRAYS[d.king_sq[them]] | ROOK_XRAYS[d.king_sq[them]]))) {
+		d.checks |= slider_checks(delta_piece(&d, us, PC_B), delta_piece(&d, us, PC_R), delta_piece(&d, us, PC_Q), d.occ_both, d.king_sq[them]);
+	}
 #define MC_S (us ^ 1u)
 #define MC_KM kmv
 #define MC_LEAF 1
@@ -279,7 +240,7 @@ AINLINE uint64_t gen_leaf_delta(struct position *b, uint32_t mfrom, uint32_t mto
 #define PROMOTION(F, T, P, C, R) 0
 #define DOUBLE(F, T, R) 0
 #define MC_DELTA_VIEW 1
-#include "mindchess_body.inc"
+#include "mindchess_body_zen5.inc"
 #undef MC_S
 #undef MC_KM
 #undef MC_LEAF
@@ -312,7 +273,7 @@ AINLINE uint64_t gen_leaf_delta(struct position *b, uint32_t mfrom, uint32_t mto
 #define MC_CAN_CASTLE(A, CS) can_castle(b, (A), (CS))
 
 // [=]===^=[ gen_move: depth-2, fuses the leaf child ]================[=]
-AINLINE uint64_t gen_move(struct position *b, uint32_t side, uint32_t kmv, uint32_t kev) {
+AINLINE uint64_t gen_move(struct position *b, uint32_t side, uint32_t kmv, uint32_t kev, uint32_t check_ray_gate) {
 	uint64_t leaf_knight_moves = 0;
 #if defined(__clang__)
 	uint64_t leaf_knights = b->pieces[side ^ 1u][PC_N];
@@ -327,11 +288,11 @@ AINLINE uint64_t gen_move(struct position *b, uint32_t side, uint32_t kmv, uint3
 #define MC_LEAF 0
 #define RN(nbp) gen_leaf((nbp), (side) ^ 1u, kev)
 #define RK(nbp) gen_leaf((nbp), (side) ^ 1u, kev)
-#define GENERIC(F, T, P, C, R) gen_leaf_delta(b, (F), (T), (P), (C), side, kev, NOSQUARE, leaf_knight_moves)
+#define GENERIC(F, T, P, C, R) gen_leaf_delta(b, (F), (T), (P), (C), side, kev, NOSQUARE, leaf_knight_moves, check_ray_gate)
 #define PROMOTION(F, T, P, C, R) (make_promo(b, (F), (T), &nb, (P), side, (C)), R(&nb))
-#define DOUBLE(F, T, R) gen_leaf_delta(b, (F), (T), PC_P, 0u, side, kev, (uint32_t)((int32_t)(F) + PAWN_PUSH[side]), leaf_knight_moves)
+#define DOUBLE(F, T, R) gen_leaf_delta(b, (F), (T), PC_P, 0u, side, kev, (uint32_t)((int32_t)(F) + PAWN_PUSH[side]), leaf_knight_moves, check_ray_gate)
 #define MC_DELTA_VIEW 0
-#include "mindchess_body.inc"
+#include "mindchess_body_zen5.inc"
 #undef MC_S
 #undef MC_KM
 #undef MC_LEAF
@@ -341,6 +302,56 @@ AINLINE uint64_t gen_move(struct position *b, uint32_t side, uint32_t kmv, uint3
 #undef PROMOTION
 #undef DOUBLE
 #undef MC_DELTA_VIEW
+}
+
+// [=]===^=[ perft_2_0_x_0 ]=========================================[=]
+__attribute__((noinline, aligned(64)))
+static uint64_t perft_2_0_x_0(struct position *b, uint32_t km) {
+	return gen_move(b, 0u, km, 0u, 0u);
+}
+
+// [=]===^=[ perft_2_0_1_0 ]=========================================[=]
+__attribute__((noinline))
+static uint64_t perft_2_0_1_0(struct position *b) {
+	return gen_move(b, 0u, 1u, 0u, 1u);
+}
+
+// [=]===^=[ perft_2_0_x_1 ]=========================================[=]
+__attribute__((noinline))
+static uint64_t perft_2_0_x_1(struct position *b, uint32_t km) {
+	return gen_move(b, 0u, km, 1u, 0u);
+}
+
+// [=]===^=[ perft_2_1_x_0 ]=========================================[=]
+__attribute__((noinline))
+static uint64_t perft_2_1_x_0(struct position *b, uint32_t km) {
+	return gen_move(b, 1u, km, 0u, 0u);
+}
+
+// [=]===^=[ perft_2_1_x_1 ]=========================================[=]
+__attribute__((noinline))
+static uint64_t perft_2_1_x_1(struct position *b, uint32_t km) {
+	return gen_move(b, 1u, km, 1u, 0u);
+}
+
+// [=]===^=[ perft2 ]================================================[=]
+AINLINE uint64_t perft2(struct position *b, uint32_t idx) {
+	if(idx & 4u) {
+		if(idx & 1u) {
+			return perft_2_1_x_1(b, (idx >> 1) & 1u);
+		}
+		return perft_2_1_x_0(b, (idx >> 1) & 1u);
+	}
+	if(idx & 1u) {
+		return perft_2_0_x_1(b, (idx >> 1) & 1u);
+	}
+	if(idx & 2u) {
+		if(b->stm == WHITE) {
+			return perft_2_0_1_0(b);
+		}
+		return perft_2_0_x_0(b, 1u);
+	}
+	return perft_2_0_x_0(b, 0u);
 }
 
 // [=]===^=[ deep child dispatch (const-folded per call site) ]=======[=]
@@ -419,16 +430,12 @@ AINLINE uint64_t gen_deep(struct position *b, uint32_t side, uint32_t kmv, uint3
 #undef MC_CAN_CASTLE
 
 #define MK_LEAF(s, km, ke) AINLINE uint64_t perft_1_##s##_##km##_##ke(struct position *b) { return gen_leaf(b, s##u, km##u); }
-#define MK_D2(s, km, ke)   static uint64_t perft_2_##s##_##km##_##ke(struct position *b) { return gen_move(b, s##u, km##u, ke##u); }
 #define MK_DEEP(s, km, ke) static uint64_t perft_deep_##s##_##km##_##ke(struct position *b, uint32_t depth) { return gen_deep(b, s##u, km##u, ke##u, depth); }
 MK_LEAF(0,0,0) MK_LEAF(0,0,1) MK_LEAF(0,1,0) MK_LEAF(0,1,1)
 MK_LEAF(1,0,0) MK_LEAF(1,0,1) MK_LEAF(1,1,0) MK_LEAF(1,1,1)
-MK_D2(0,0,0) MK_D2(0,0,1) MK_D2(0,1,0) MK_D2(0,1,1)
-MK_D2(1,0,0) MK_D2(1,0,1) MK_D2(1,1,0) MK_D2(1,1,1)
 MK_DEEP(0,0,0) MK_DEEP(0,0,1) MK_DEEP(0,1,0) MK_DEEP(0,1,1)
 MK_DEEP(1,0,0) MK_DEEP(1,0,1) MK_DEEP(1,1,0) MK_DEEP(1,1,1)
 #undef MK_LEAF
-#undef MK_D2
 #undef MK_DEEP
 
 static uint64_t perft_run(struct position *p, uint32_t depth) {

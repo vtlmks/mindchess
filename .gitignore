@@ -1,5 +1,6 @@
 # build artifacts (binaries)
 /mindchess
+/mindchess_zen5
 /mindchess[0-9]
 /mindchess[0-9]*[0-9]
 /mindchess[0-9]_gcc
@@ -13,9 +14,9 @@
 /simd_probe
 /chessbit_gcc
 /chessbit_clang
+/chessbit_gcc_zen5
+/chessbit_clang_zen5
 
 # profiling artifacts
 *.data
 perf.data*
-
-# vendored reference engine (large binaries, not recompiled here)

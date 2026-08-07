@@ -15,32 +15,61 @@ POS_FENS=(
 POS_DEPTH=(7 6 8 6 6 6)
 POS_NODES=(3195901860 8031647685 3009794393 706045033 3048196529 6923051137)
 
-CC="${1:-clang}"
+VARIANT="${1:-zen4}"
 RUNS="${2:-5}"
-MIND="./mindchess"
-CHESSBIT="./chessbit_$CC"
+CORE="${3:-1}"
+MIND_CC="${4:-clang}"
+CHESSBIT_CC="${5:-$MIND_CC}"
 
-case "$CC" in
+case "$VARIANT" in
+	zen4)
+		MIND="./mindchess"
+		CHESSBIT="./chessbit_$CHESSBIT_CC"
+		;;
+	zen5)
+		MIND="./mindchess_zen5"
+		CHESSBIT="./chessbit_${CHESSBIT_CC}_zen5"
+		;;
+	*)
+		echo "usage: $0 [zen4|zen5] [runs] [core] [mind compiler] [Chessbit compiler]" >&2
+		exit 1
+		;;
+esac
+case "$MIND_CC" in
 	gcc|clang) ;;
-	*) echo "usage: $0 [gcc|clang] [runs]" >&2; exit 1 ;;
+	*) echo "Mindchess compiler must be gcc or clang" >&2; exit 1 ;;
+esac
+case "$CHESSBIT_CC" in
+	gcc|clang) ;;
+	*) echo "Chessbit compiler must be gcc or clang" >&2; exit 1 ;;
 esac
 
 if ! [[ "$RUNS" =~ ^[1-9][0-9]*$ ]] || ((RUNS % 2 == 0)); then
 	echo "runs must be a positive odd number" >&2
 	exit 1
 fi
+if ! [[ "$CORE" =~ ^[0-9]+$ ]]; then
+	echo "core must be a logical CPU number" >&2
+	exit 1
+fi
 
-echo "building mindchess and Chessbit with $CC"
-./build.sh "$CC"
-./build_chessbit.sh "$CC"
-echo "benchmarking on core 1 with SCHED_FIFO priority 99"
+echo "building $VARIANT Mindchess with $MIND_CC and Chessbit with $CHESSBIT_CC"
+./build.sh "$MIND_CC" "$VARIANT"
+./build_chessbit.sh "$CHESSBIT_CC" "$VARIANT"
+echo "benchmarking on core $CORE with SCHED_FIFO priority 99"
 
 mind_run() {
-	taskset -c 1 chrt -f 99 "$MIND" perft "$1" "$2" | awk '{print $2, $4}'
+	output=$(taskset -c "$CORE" chrt -f 99 "$MIND" perft "$1" "$2")
+	awk '{print $2, $4}' <<< "$output"
 }
 
 chessbit_run() {
-	printf 'setfen %s\nperft %s\nexit\n' "$1" "$2" | taskset -c 1 chrt -f 99 "$CHESSBIT" | awk -F'\t' '/Nodes/{gsub(/ /, "", $NF); nodes=$NF} /Average/{gsub(/[^0-9.]/, "", $NF); speed=$NF} END{print nodes, speed}'
+	input="setfen $1
+perft $2
+exit
+"
+	output=$(taskset -c "$CORE" chrt -f 99 "$CHESSBIT" <<< "$input")
+	awk -F'\t' '/Nodes/{gsub(/ /, "", $NF); nodes=$NF} /Average/{gsub(/[^0-9.]/, "", $NF); speed=$NF} END{print nodes, speed}' <<< "$output"
 }
 
 printf '%-10s %5s %14s %12s %12s %9s\n' position depth nodes mindchess chessbit lead
